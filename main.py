@@ -30,8 +30,11 @@ class AccelDirection(Enum):
 
 @click.argument('dirname')
 @click.option("--argdir", "-d", type=click.Choice(AccelDirection))
+@click.option("--unitspersample", "-u", type=int)
+@click.option("--big", "-b")
+@click.option("--velocity", "-v", type=float)
 @cli.command
-def render(dirname, argdir = 0):
+def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.0):
     if not os.path.isdir(dirname):
         click.echo("bad directory")
         sys.exit(1)
@@ -48,14 +51,20 @@ def render(dirname, argdir = 0):
     # pick which data we're using
     if argdir == None:
         argdir = AccelDirection.X
+    if unitspersample == None:
+        unitspersample = 100
+    if big == None:
+        big = False
+    if velocity == None:
+        velocity = 0.0
 
-    accel = [xdata, ydata, zdata][int(argdir.value / 3)]
+    accel = [xdata, ydata, zdata][int(argdir.value / 3)].astype(float)
     if (argdir.value % 3 == 2):
-        accel = -accel
+        accel = -1 * accel
 
     isA = np.strings.slice(timedata, 0, 1) == b'A'
     # use mask array to look for first-character == 'A'
-    accel = accel[isA].astype(float)
+    accel = accel[isA]
     timedata = timedata[isA]
     timedata = np.strings.slice(timedata, 1, 32).astype(int)
     timedata = timedata - timedata[0]
@@ -64,8 +73,9 @@ def render(dirname, argdir = 0):
     metadata = read_metadata(metafile)
 
     width = int(metadata["camera.Width"])
-
+    accel[0] = velocity
     speed = np.cumsum(accel)
+    print(speed)
     elapsed = np.diff(timedata)
 
     camerafile = os.path.join(dirname, "cam.data")
@@ -76,17 +86,18 @@ def render(dirname, argdir = 0):
     image_dtype = ""
     image = np.memmap(camerafile, dtype=np.uint8, mode="r", shape=(frames,width))
 
-
     exposures_per_sec = 1000 / float(metadata["camera.ExposureTimeAbs"])
-    print(f"camera runs at {exposures_per_sec} fps")
+    print(f"camera runs at {exposures_per_sec} frames / millisecond")
     print(timedata)
 
     start_offset = timedata[:-1] * width
     out = np.zeros((width, width))
+    # TODO: finish implementing big image (ie paste repeatedly bc PIL)
+    #big_out = np.zeroes((width,width))
+    #big_i = 0
 
     out_i = 0
     buf_i = 0
-
 
     for idx, s in enumerate(elapsed):
         # TODO unroll more of this into matrix operations
@@ -95,16 +106,16 @@ def render(dirname, argdir = 0):
         s = speed[idx]
         e = elapsed[idx]
         dist = s * e
+        # print(f"idx: {idx}, s: {s}, dist: {dist}")
 
-
-        units_per_sample = 100 # TODO read from flag
-        samples = int(dist / units_per_sample)
+        samples = int(dist / unitspersample)
         if (samples < 0):
             continue
 
         t = timedata[idx]
         start_i = int(exposures_per_sec * t)
         end_i = int(exposures_per_sec * (t + e))
+        # print(f"start_i: {start_i}, end_i: {end_i}")
 
         if (end_i < frames):
             slice_is = np.linspace(start_i, end_i, num=samples).astype(int)
@@ -114,9 +125,9 @@ def render(dirname, argdir = 0):
                 buf_i += 1
 
                 if buf_i == width:
-                    print(f"{idx} of {len(elapsed)} ({t} seconds)")
+                    print(f"{idx} of {len(elapsed)} ({t} µseconds)")
                     img = Image.fromarray(out.T).convert('RGB')
-                    img.save(f"out-{out_i:04d}.jpeg")
+                    img.save(os.path.join(dirname, f"out-{out_i:04d}.jpeg"))
                     out_i += 1
                     out = np.zeros((width, width))
                     buf_i = 0
@@ -125,7 +136,7 @@ def render(dirname, argdir = 0):
 
     # TODO truncate
     img = Image.fromarray(out.T).convert('RGB')
-    img.save(f"out-{out_i:04d}.jpeg")
+    img.save(os.path.join(dirname,f"out-{out_i:04d}.jpeg"))
 
 
 
