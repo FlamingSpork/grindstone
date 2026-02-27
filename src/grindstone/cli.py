@@ -11,7 +11,7 @@ import warnings
 from numpy.lib._iotools import ConversionWarning
 
 @click.group
-def cli():
+def app():
     pass
 
 
@@ -33,7 +33,7 @@ class AccelDirection(Enum):
 @click.option("--unitspersample", "-u", type=int)
 @click.option("--big", "-b")
 @click.option("--velocity", "-v", type=float)
-@cli.command
+@app.command
 def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.0):
     if not os.path.isdir(dirname):
         click.echo("bad directory")
@@ -152,4 +152,4 @@ def read_metadata(filename: str) -> dict[str, str]:
     return config
 
 if __name__ == '__main__':
-    cli()
+    app()

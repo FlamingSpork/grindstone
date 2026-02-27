@@ -5,5 +5,5 @@ usage:
 ```
 uv venv
 
-time uv run main.py render -d Z ../data/12-14_15-11
+time uv run gs.py render -d Z ../data/12-14_15-11
 ```
