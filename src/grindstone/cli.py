@@ -3,79 +3,78 @@ import csv
 import sys
 import os.path
 import numpy as np
-from enum import Enum
+
 # import scipy
 from PIL import Image
 
+from .consts import AccelDirection, Gravity
+
 import warnings
 from numpy.lib._iotools import ConversionWarning
+
+from .stage import adjust, load, parse, process
+from .stage import render as rendering
+
+# TODO remove PIL.image so we don't have this annoying name collision
+from .stage.image import FramesFromTimestampsBig, FramesFromTimestampsSquare
+from .pipeline import Pipeline
 
 @click.group
 def app():
     pass
 
 
-class AccelDirection(Enum):
-    X = 0
-    PX = 1
-    NX = 2
-    Y = 3
-    PY = 4
-    NY = 5
-    Z = 6
-    PZ = 7
-    NZ = 8
-
-
-
 @click.argument('dirname')
 @click.option("--argdir", "-d", type=click.Choice(AccelDirection))
-@click.option("--unitspersample", "-u", type=int)
+@click.option("--unitspersample", "-u", type=float)
 @click.option("--big", "-b")
 @click.option("--velocity", "-v", type=float)
 @app.command
-def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.0):
-    if not os.path.isdir(dirname):
-        click.echo("bad directory")
-        sys.exit(1)
-    serialfile = os.path.join(dirname, "serial.txt")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=ConversionWarning)
-        timedata, xdata, ydata, zdata = np.array(np.genfromtxt(
-            serialfile, delimiter=',',
-            invalid_raise=False, loose=True,
-            unpack=True,
-            dtype="S32,f8,f8,f8",
-            names=['timestamp', 'x', 'y', 'z']))
-
+def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0):
     # pick which data we're using
     if argdir == None:
-        argdir = AccelDirection.X
+        argdir = consts.AccelDirection.X
     if unitspersample == None:
-        unitspersample = 100
-    if big == None:
-        big = False
+        unitspersample = 100.0
     if velocity == None:
         velocity = 0.0
 
-    accel = [xdata, ydata, zdata][int(argdir.value / 3)].astype(float)
-    if (argdir.value % 3 == 2):
-        accel = -1 * accel
+    if big == True:
+        accum_strategy = FramesFromTimestampsBig()
+    else:
+        # TODO width is hardcoded because we're constructing it here
+        # before we go and do load.MetadataCsv
+        accum_strategy = FramesFromTimestampsSquare(
+            invert=False, width=2048, dirname=dirname,
+        )
 
-    isA = np.strings.slice(timedata, 0, 1) == b'A'
-    # use mask array to look for first-character == 'A'
-    accel = accel[isA]
-    timedata = timedata[isA]
-    timedata = np.strings.slice(timedata, 1, 32).astype(int)
-    timedata = timedata - timedata[0]
 
-    metafile = os.path.join(dirname, "meta.csv")
-    metadata = read_metadata(metafile)
+    pipe = Pipeline(stages=[
+        load.DirectoryLoad(dirname=dirname),
+        load.MetadataCSV(dirname=dirname),
+        parse.DirectoryStringData(
+            argdir=argdir,
+            calibration=[0.0, 0.0, 0.0],
+            gravity=Gravity,
+        ),
+        process.GenerateSpeedsFromAccelerometer(),
+        adjust.InitialVelocity(velocity),
+        process.GeneratePositionsFromSpeed(),
+        process.GenerateTimestampsPerFrame(unitspersample),
+        load.MmapGreyscaleImage(dirname),
+        rendering.SelectGrayscaleFramesFromTimestamps(
+            accum_strategy,
+            1.0/unitspersample,
+        ),
+    ])
 
-    width = int(metadata["camera.Width"])
-    accel[0] = velocity
-    speed = np.cumsum(accel)
-    print(speed)
+    pipe.run()
+
+
+
+
+
+def old():
     elapsed = np.diff(timedata)
 
     camerafile = os.path.join(dirname, "cam.data")
@@ -115,7 +114,6 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
         t = timedata[idx]
         start_i = int(exposures_per_sec * t)
         end_i = int(exposures_per_sec * (t + e))
-        # print(f"start_i: {start_i}, end_i: {end_i}")
 
         if (end_i < frames):
             slice_is = np.linspace(start_i, end_i, num=samples).astype(int)
@@ -142,14 +140,6 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
 
 
 
-def read_metadata(filename: str) -> dict[str, str]:
-    config = {}
-    with open(filename) as csvfile:
-        reader = csv.reader(csvfile, delimiter=',')
-        reader.__next__() # discard header
-        for row in reader:
-            config[row[0]] = row[1]
-    return config
 
 if __name__ == '__main__':
     app()
