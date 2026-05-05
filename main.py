@@ -2,6 +2,7 @@ import click
 import csv
 import sys
 import os.path
+import glob
 import numpy as np
 from enum import Enum
 # import scipy
@@ -31,10 +32,11 @@ class AccelDirection(Enum):
 @click.argument('dirname')
 @click.option("--argdir", "-d", type=click.Choice(AccelDirection))
 @click.option("--unitspersample", "-u", type=int)
-@click.option("--big", "-b")
 @click.option("--velocity", "-v", type=float)
+@click.option("--tempdir", "-t", is_flag=True, help="write image files to /tmp instead of the input dir")
+@click.option("--cutoff", "-c", type=int, help="percentage through the capture file to cut off at (0-100)")
 @cli.command
-def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.0):
+def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.0, tempdir=False, cutoff=100):
     if not os.path.isdir(dirname):
         click.echo("bad directory")
         sys.exit(1)
@@ -49,14 +51,25 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
             names=['timestamp', 'x', 'y', 'z']))
 
     # pick which data we're using
-    if argdir == None:
+    if argdir is None:
         argdir = AccelDirection.X
-    if unitspersample == None:
+    if unitspersample is None:
         unitspersample = 100
-    if big == None:
-        big = False
-    if velocity == None:
+    if velocity is None:
         velocity = 0.0
+    if tempdir is None:
+        tempdir = False
+    if cutoff is None:
+        cutoff = 100
+
+    outdir = dirname
+    if tempdir:
+        outdir = os.path.join("/tmp", os.path.basename(os.path.abspath(dirname)))
+        if os.path.exists(outdir):
+            for f in glob.glob(outdir+"/*.jpeg"):
+                os.remove(f)
+        else:
+            os.mkdir(outdir)
 
     accel = [xdata, ydata, zdata][int(argdir.value / 3)].astype(float)
     if (argdir.value % 3 == 2):
@@ -83,6 +96,9 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
     size = stat.st_size
     frames = int(size / width)
 
+    if cutoff != 100:
+        frames = int((cutoff / 100.0) * int(metadata["capture.LineCount"]))
+
     image_dtype = ""
     image = np.memmap(camerafile, dtype=np.uint8, mode="r", shape=(frames,width))
 
@@ -92,9 +108,6 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
 
     start_offset = timedata[:-1] * width
     out = np.zeros((width, width))
-    # TODO: finish implementing big image (ie paste repeatedly bc PIL)
-    #big_out = np.zeroes((width,width))
-    #big_i = 0
 
     out_i = 0
     buf_i = 0
@@ -126,8 +139,9 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
 
                 if buf_i == width:
                     print(f"{idx} of {len(elapsed)} ({t} µseconds)")
+                    #TODO: check if I can speed this up by not convert()ing (read: keep it as 8 bit grayscale) and save as TIFF
                     img = Image.fromarray(out.T).convert('RGB')
-                    img.save(os.path.join(dirname, f"out-{out_i:04d}.jpeg"))
+                    img.save(os.path.join(outdir, f"out-{out_i:04d}.jpeg"))
                     out_i += 1
                     out = np.zeros((width, width))
                     buf_i = 0
@@ -136,7 +150,7 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
 
     # TODO truncate
     img = Image.fromarray(out.T).convert('RGB')
-    img.save(os.path.join(dirname,f"out-{out_i:04d}.jpeg"))
+    img.save(os.path.join(outdir,f"out-{out_i:04d}.jpeg"))
 
 
 
