@@ -151,6 +151,7 @@ def render(dirname, argdir = 0, unitspersample = 100, big = False, velocity = 0.
     # TODO truncate
     img = Image.fromarray(out.T).convert('RGB')
     img.save(os.path.join(outdir,f"out-{out_i:04d}.jpeg"))
+    print("Complete! outputted",out_i,"images")
 
 
 
