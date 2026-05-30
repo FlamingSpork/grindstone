@@ -29,4 +29,10 @@ class DirectoryStringData:
 
         time = time - time[0]
 
+        # before this key existed, everything was milliseconds
+        if "serial.TimeUnit" in payload.raw_metadata:
+            if payload.raw_metadata["serial.TimeUnit"] == "microsecond":
+                print("time unit is microseconds")
+                time = time / 1000.0
+
         payload.accel_data = Timed1DIMU(time=time, accel=accel)

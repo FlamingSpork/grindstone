@@ -74,3 +74,17 @@ class MmapGreyscaleImage:
                 payload.camera_metadata.width,
             )
         )
+
+@dataclass
+class MmapColorImage:
+    dirname: str
+    def process(self, payload: Payload) -> None:
+        camerafile = os.path.join(self.dirname, "cam.data")
+        payload.image_color = np.memmap(
+            camerafile, dtype=np.uint8, mode="r",
+            shape=(
+                payload.image_metadata.frames,
+                payload.camera_metadata.width,
+                3
+            )
+        )

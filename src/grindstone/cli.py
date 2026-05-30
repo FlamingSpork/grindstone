@@ -7,6 +7,7 @@ import numpy as np
 # import scipy
 from PIL import Image
 
+from src.grindstone import consts
 from .consts import AccelDirection, Gravity
 
 import warnings

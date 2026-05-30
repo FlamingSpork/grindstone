@@ -71,6 +71,8 @@ class AccumStrategy(Protocol):
 
 type GreyscaleImage = np.ndarray[tuple[int, int], np.uint8]
 type GreyscaleSlice = np.array[np.uint8]
+type ColorImage = np.ndarray[tuple[int, int, int], np.uint8]
+type ColorSlice = np.ndarray[tuple[int, int], np.uint8]
 
 # (big fat union class we build up over the pipeline)
 class Payload:
@@ -103,3 +105,4 @@ class Payload:
 
     # input image
     image_greyscale: Optional[GreyscaleImage]
+    image_color: Optional[ColorImage]
