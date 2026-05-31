@@ -32,6 +32,10 @@ class SelectColorFramesFromTimestamps:
             # TODO possibly skew it to adjust for funny camera angle?
 
             # pass it to our image accumulator
-            self.accum_strategy.accumulate(p.image_color[i])
+            try:
+                self.accum_strategy.accumulate(p.image_color[i])
+            except IndexError:
+                print("reached end of image, finalizing")
+                break
 
         self.accum_strategy.finalize()
