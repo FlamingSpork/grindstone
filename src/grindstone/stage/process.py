@@ -54,4 +54,18 @@ class GenerateTimestampsPerFrame:
             datetime.timedelta(seconds=self.metersPerPixel),
         ).interpolate(method='linear')
 
+        # if the acceleration is shaky, a given position (and thus index) may be less than the previous one,
+        # resulting in the wrong line (or burst of lines depending on how long the positions are wrong for) being placed
+        # in the output image, looking almost like a barcode
+        # because of how we're using position as the index, I don't know how we'd even go about fixing it
+        # so far, this has only happened in one capture (05-29_14-41), so I'm inclined not to fix it unless it happens again
+        lP = 0
+        wrongWayCnt = 0
+        for p in payload.position_data.pos:
+            if p < lP:
+                print(f"pos {p} < lP {lP}")
+                wrongWayCnt += 1
+            lP = p
+        print(f"wrong way position movement samples: {wrongWayCnt}") # should be zero
+
         payload.frame_times = FrameTimeData(time=resampledPos.to_numpy())
