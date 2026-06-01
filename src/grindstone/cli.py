@@ -15,9 +15,13 @@ from numpy.lib._iotools import ConversionWarning
 
 from .stage import adjust, load, parse, process
 from .stage import render as rendering
+from .stage.render import ColorImageSource, GreyscaleImageSource
 
 # TODO remove PIL.image so we don't have this annoying name collision
-from .stage.image import FramesFromTimestampsBig, FramesFromTimestampsSquare
+from .stage.image import (
+    FramesFromTimestampsBig, FramesFromTimestampsSquare,
+    ColorFramesFromTimestampsBig, ColorFramesFromTimestampsSquare,
+)
 from .pipeline import Pipeline
 
 @click.group
@@ -30,8 +34,9 @@ def app():
 @click.option("--unitspersample", "-u", type=float)
 @click.option("--big", "-b")
 @click.option("--velocity", "-v", type=float)
+@click.option("--upsidedown", "-U", is_flag=True)
 @app.command
-def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0):
+def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0, upsidedown= False):
     # pick which data we're using
     if argdir == None:
         argdir = consts.AccelDirection.X
@@ -40,15 +45,27 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
     if velocity == None:
         velocity = 0.0
 
-    if big == True:
-        accum_strategy = FramesFromTimestampsBig()
-    else:
-        # TODO width is hardcoded because we're constructing it here
-        # before we go and do load.MetadataCsv
-        accum_strategy = FramesFromTimestampsSquare(
-            invert=False, width=2048, dirname=dirname,
-        )
+    meta = load.read_metadata(os.path.join(dirname, "meta.csv"))
+    width = int(meta["camera.Width"])
+    is_color = meta.get("camera.PixelFormat") == "RGB8Packed"
 
+    if is_color:
+        image_stage = load.MmapColorImage(dirname)
+        source = ColorImageSource()
+    else:
+        image_stage = load.MmapGreyscaleImage(dirname)
+        source = GrayscaleImageSource()
+
+    if big:
+        accum_strategy = ColorFramesFromTimestampsBig(invert=upsidedown, dirname=dirname, width=width, height=width)
+    else:
+        accum_strategy = ColorFramesFromTimestampsSquare(invert=upsidedown, dirname=dirname, width=width)
+
+    render_stage = rendering.SelectFramesFromTimestamps(
+        accum_strategy=accum_strategy,
+        distance = 1.0/unitspersample,
+        image_source = source,
+    )
 
     pipe = Pipeline(stages=[
         load.DirectoryLoad(dirname=dirname),
@@ -62,11 +79,8 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
         adjust.InitialVelocity(velocity),
         process.GeneratePositionsFromSpeed(),
         process.GenerateTimestampsPerFrame(unitspersample),
-        load.MmapGreyscaleImage(dirname),
-        rendering.SelectGrayscaleFramesFromTimestamps(
-            accum_strategy,
-            1.0/unitspersample,
-        ),
+        image_stage,
+        render_stage,
     ])
 
     pipe.run()

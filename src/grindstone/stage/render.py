@@ -1,41 +1,38 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import numpy as np
-import pandas as pd
 
-from ..types import Payload
+from ..types import Payload, GreyscaleImage, ColorImage
 
-@dataclass
-class SelectGrayscaleFramesFromTimestamps:
-    accum_strategy: AccumStrategy
-    distance: float
 
-    def process(self, p: Payload):
-        for ftime in p.frame_times.time:
-            # locate the frame at the index
-            i = int(p.camera_metadata.exposures_per_sec * ftime)
-            # TODO possibly skew it to adjust for funny camera angle?
+class ImageSource(ABC):
+    @abstractmethod
+    def get(self, p: Payload) -> GreyscaleImage | ColorImage:
+        ...
 
-            # pass it to our image accumulator
-            self.accum_strategy.accumulate(p.image_greyscale[i])
+class GreyscaleImageSource(ImageSource):
+    def get(self, p: Payload) -> GreyscaleImage:
+        return p.image_greyscale
 
-        self.accum_strategy.finalize()
+class ColorImageSource(ImageSource):
+    def get(self, p: Payload) -> ColorImage:
+        return p.image_color
+
 
 @dataclass
-class SelectColorFramesFromTimestamps:
+class SelectFramesFromTimestamps:
     accum_strategy: AccumStrategy
     distance: float
+    image_source: ImageSource
 
     def process(self, p: Payload):
+        image = self.image_source.get(p)
+        eps = p.camera_metadata.exposures_per_sec
+
         for ftime in p.frame_times.time:
             # locate the frame at the index
-            i = int(p.camera_metadata.exposures_per_sec * ftime)
+            i = int(eps * ftime)
             # TODO possibly skew it to adjust for funny camera angle?
-
-            # pass it to our image accumulator
-            try:
-                self.accum_strategy.accumulate(p.image_color[i])
-            except IndexError:
-                print("reached end of image, finalizing")
-                break
+            self.accum_strategy.accumulate(image[i])
 
         self.accum_strategy.finalize()
