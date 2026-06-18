@@ -32,7 +32,7 @@ def app():
 @click.argument('dirname')
 @click.option("--argdir", "-d", type=click.Choice(AccelDirection))
 @click.option("--unitspersample", "-u", type=float)
-@click.option("--big", "-b")
+@click.option("--big", "-b", is_flag=True)
 @click.option("--velocity", "-v", type=float)
 @click.option("--upsidedown", "-U", is_flag=True)
 @app.command
@@ -44,6 +44,8 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
         unitspersample = 100.0
     if velocity == None:
         velocity = 0.0
+    if big == None:
+        big = False
 
     meta = load.read_metadata(os.path.join(dirname, "meta.csv"))
     width = int(meta["camera.Width"])
@@ -57,7 +59,7 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
         source = GrayscaleImageSource()
 
     if big:
-        accum_strategy = ColorFramesFromTimestampsBig(invert=upsidedown, dirname=dirname, width=width, height=width)
+        accum_strategy = ColorFramesFromTimestampsBig(invert=upsidedown, dirname=dirname, width=10000, height=width)
     else:
         accum_strategy = ColorFramesFromTimestampsSquare(invert=upsidedown, dirname=dirname, width=width)
 
