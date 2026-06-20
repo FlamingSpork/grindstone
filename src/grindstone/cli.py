@@ -38,8 +38,6 @@ def app():
 @app.command
 def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0, upsidedown= False):
     # pick which data we're using
-    if argdir == None:
-        argdir = consts.AccelDirection.X
     if unitspersample == None:
         unitspersample = 100.0
     if velocity == None:
@@ -50,6 +48,20 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
     meta = load.read_metadata(os.path.join(dirname, "meta.csv"))
     width = int(meta["camera.Width"])
     is_color = meta.get("camera.PixelFormat") == "RGB8Packed"
+
+    # argument passed at CLI takes precedence
+    if argdir is None:
+        try:
+            if meta.get("accelerometer.Direction") is not None:
+                # the names of enum values can be used with operator[], but it throws AttributeError if it isn't valid
+                argdir = consts.AccelDirection[meta.get("accelerometer.Direction")]
+                print("read acceleration direction:", argdir)
+            else:
+                argdir = consts.AccelDirection.X
+                print("warning: undefined accelerometer direction, using", argdir)
+        except AttributeError:
+            argdir = consts.AccelDirection.X
+            print("warning: undefined accelerometer direction, using", argdir)
 
     if is_color:
         image_stage = load.MmapColorImage(dirname)
