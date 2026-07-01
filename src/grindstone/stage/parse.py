@@ -25,7 +25,7 @@ class DirectoryStringData:
 
         accel = accel[isA]
         time = data.time[isA]
-        time = np.strings.slice(data.time, 1, 32).astype(float)
+        time = np.strings.slice(time, 1, 32).astype(float)
 
         time = time - time[0]
 

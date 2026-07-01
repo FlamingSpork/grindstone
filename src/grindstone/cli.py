@@ -35,8 +35,9 @@ def app():
 @click.option("--big", "-b", is_flag=True)
 @click.option("--velocity", "-v", type=float)
 @click.option("--upsidedown", "-U", is_flag=True)
+@click.option("--outformat", "-f", type=str, default="jpeg")
 @app.command
-def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0, upsidedown= False):
+def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0, upsidedown= False, outformat="jpeg"):
     # pick which data we're using
     if unitspersample == None:
         unitspersample = 100.0
@@ -68,12 +69,18 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
         source = ColorImageSource()
     else:
         image_stage = load.MmapGreyscaleImage(dirname)
-        source = GrayscaleImageSource()
+        source = GreyscaleImageSource()
 
     if big:
-        accum_strategy = ColorFramesFromTimestampsBig(invert=upsidedown, dirname=dirname, width=10000, height=width)
+        if is_color:
+            accum_strategy = ColorFramesFromTimestampsBig(invert=upsidedown, dirname=dirname, width=10000, height=width, ext=outformat)
+        else:
+            accum_strategy = FramesFromTimestampsBig(invert=upsidedown, dirname=dirname, width=10000, height=width, ext=outformat)
     else:
-        accum_strategy = ColorFramesFromTimestampsSquare(invert=upsidedown, dirname=dirname, width=width)
+        if is_color:
+            accum_strategy = ColorFramesFromTimestampsSquare(invert=upsidedown, dirname=dirname, width=width, ext=outformat)
+        else:
+            accum_strategy = FramesFromTimestampsSquare(invert=upsidedown, dirname=dirname, width=width, ext=outformat)
 
     render_stage = rendering.SelectFramesFromTimestamps(
         accum_strategy=accum_strategy,
