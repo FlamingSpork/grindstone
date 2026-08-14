@@ -30,12 +30,12 @@ def app():
 
 
 @click.argument('dirname')
-@click.option("--argdir", "-d", type=click.Choice(AccelDirection))
-@click.option("--unitspersample", "-u", type=float)
-@click.option("--big", "-b", is_flag=True)
-@click.option("--velocity", "-v", type=float)
+@click.option("--argdir", "-d", type=click.Choice(AccelDirection), help="camera motion direction")
+@click.option("--unitspersample", "-u", type=float, help="how much distance each pixel represents")
+@click.option("--big", "-b", is_flag=True, help="set to output large (10,000 px wide) images instead of square ones")
+@click.option("--velocity", "-v", type=float, help="camera velocity at the start of the capture")
 @click.option("--upsidedown", "-U", is_flag=True)
-@click.option("--outformat", "-f", type=str, default="jpeg")
+@click.option("--outformat", "-f", type=str, default="jpeg", help="format for output images. default is jpeg; tif and png are available")
 @app.command
 def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 0.0, upsidedown= False, outformat="jpeg"):
     # pick which data we're using
@@ -105,77 +105,6 @@ def render(dirname, argdir = 0, unitspersample = 100.0, big = False, velocity = 
     ])
 
     pipe.run()
-
-
-
-
-
-def old():
-    elapsed = np.diff(timedata)
-
-    camerafile = os.path.join(dirname, "cam.data")
-    stat = os.stat(camerafile)
-    size = stat.st_size
-    frames = int(size / width)
-
-    image_dtype = ""
-    image = np.memmap(camerafile, dtype=np.uint8, mode="r", shape=(frames,width))
-
-    exposures_per_sec = 1000 / float(metadata["camera.ExposureTimeAbs"])
-    print(f"camera runs at {exposures_per_sec} frames / millisecond")
-    print(timedata)
-
-    start_offset = timedata[:-1] * width
-    out = np.zeros((width, width))
-    # TODO: finish implementing big image (ie paste repeatedly bc PIL)
-    #big_out = np.zeroes((width,width))
-    #big_i = 0
-
-    out_i = 0
-    buf_i = 0
-
-    for idx, s in enumerate(elapsed):
-        # TODO unroll more of this into matrix operations
-        # TODO interpolation of speeds
-        # instead of assuming constant starting speed
-        s = speed[idx]
-        e = elapsed[idx]
-        dist = s * e
-        # print(f"idx: {idx}, s: {s}, dist: {dist}")
-
-        samples = int(dist / unitspersample)
-        if (samples < 0):
-            continue
-
-        t = timedata[idx]
-        start_i = int(exposures_per_sec * t)
-        end_i = int(exposures_per_sec * (t + e))
-
-        if (end_i < frames):
-            slice_is = np.linspace(start_i, end_i, num=samples).astype(int)
-
-            for _, x in enumerate(slice_is):
-                out[buf_i] = image[x][::-1] # it's upside down?!
-                buf_i += 1
-
-                if buf_i == width:
-                    print(f"{idx} of {len(elapsed)} ({t} µseconds)")
-                    img = Image.fromarray(out.T).convert('RGB')
-                    img.save(os.path.join(dirname, f"out-{out_i:04d}.jpeg"))
-                    out_i += 1
-                    out = np.zeros((width, width))
-                    buf_i = 0
-        else:
-            break
-
-    # TODO truncate
-    img = Image.fromarray(out.T).convert('RGB')
-    img.save(os.path.join(dirname,f"out-{out_i:04d}.jpeg"))
-
-
-
-
-
 
 if __name__ == '__main__':
     app()

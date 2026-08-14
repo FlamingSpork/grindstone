@@ -23,7 +23,7 @@ g = arr[:, :, 1]
 b = arr[:, :, 2]
 
 rS = sp.ndimage.shift(r, [0,-1 * shiftVal])
-gS = sp.ndimage.shift(g, [0,0])
+gS = g
 bS = sp.ndimage.shift(b, [0,shiftVal])
 
 stacked = np.stack([rS, gS, bS], axis=-1)

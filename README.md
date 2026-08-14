@@ -7,3 +7,5 @@ uv venv
 
 time uv run gs.py render -d Z ../data/12-14_15-11
 ```
+
+see `uv run gs.py render --help` for options
